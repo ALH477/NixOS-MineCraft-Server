@@ -2,14 +2,13 @@
   description = "A portable Minecraft Server Module with Geyser + Floodgate support";
 
   inputs = {
-    # Using unstable to ensure access to the absolute latest JDKs and packages
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     nix-minecraft.url = "github:Infinidoge/nix-minecraft";
   };
 
   outputs = { self, nixpkgs, ... }@inputs: {
     
-    # --- 1. THE MODULE OUTPUT ---
+    # --- 1. THE SHARED MODULE (Architecture Agnostic) ---
     nixosModules.default = { config, lib, pkgs, ... }: 
       let
         cfg = config.services.my-minecraft;
@@ -46,10 +45,10 @@
             servers.survival = {
               enable = true;
               
-              # IMPORTANT: Check available versions if this fails:
-              # 'nix search github:Infinidoge/nix-minecraft paper'
+              # Paper 1.21.4 (Java is cross-platform, so this works on ARM too)
               package = pkgs.paperServers.paper-1_21_4; 
               
+              # JVM flags optimized for performance
               jvmOpts = "-Xms4G -Xmx4G -XX:+UseG1GC";
 
               serverProperties = {
@@ -61,20 +60,18 @@
               };
 
               # Declarative Plugin Installation
-              # NOTE: These URLs point to "latest". If the plugin updates upstream,
-              # the hash will change, and Nix will error. You must update the hash manually.
+              # NOTE: Run once, capture the hash error, update these values.
               symlinks = {
                 "plugins/Geyser-Spigot.jar" = pkgs.fetchurl {
                   url = "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot";
-                  sha256 = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # REPLACE THIS ON FIRST RUN
+                  sha256 = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; 
                 };
                 "plugins/Floodgate-Spigot.jar" = pkgs.fetchurl {
                   url = "https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot";
-                  sha256 = "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="; # REPLACE THIS ON FIRST RUN
+                  sha256 = "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=";
                 };
                 
                 # Declarative Geyser Config
-                # We force Geyser to listen on UDP and auth via Floodgate
                 "plugins/Geyser-Spigot/config.yml" = pkgs.writeText "config.yml" ''
                   bedrock:
                     address: 0.0.0.0
@@ -91,20 +88,36 @@
         };
       };
 
-    # --- 2. EXAMPLE SYSTEM CONFIGURATION ---
-    nixosConfigurations.minecraft-host = nixpkgs.lib.nixosSystem {
+    # --- 2. PROFILES (System Configurations) ---
+
+    # Profile 1: Standard x86_64 (Intel/AMD)
+    # Run: nix run .#minecraft-server-x86
+    nixosConfigurations.minecraft-server-x86 = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       specialArgs = { inherit inputs; };
       modules = [
-        # Import the module defined above
         self.nixosModules.default
-
         ({ ... }: {
-          # UPDATED: Set to 25.11 as requested
-          system.stateVersion = "25.11"; 
-          
-          # Enable the module
+          system.stateVersion = "25.11";
           services.my-minecraft.enable = true;
+        })
+      ];
+    };
+
+    # Profile 2: ARM64 (Raspberry Pi 4/5, Oracle Cloud ARM, Apple Silicon VMs)
+    # Run: nix run .#minecraft-server-arm
+    nixosConfigurations.minecraft-server-arm = nixpkgs.lib.nixosSystem {
+      system = "aarch64-linux";
+      specialArgs = { inherit inputs; };
+      modules = [
+        self.nixosModules.default
+        ({ ... }: {
+          system.stateVersion = "25.11";
+          services.my-minecraft.enable = true;
+          
+          # Optional: Adjust memory if running on a constrained Pi
+          services.minecraft-servers.servers.survival.jvmOpts = 
+            nixpkgs.lib.mkForce "-Xms2G -Xmx2G -XX:+UseG1GC";
         })
       ];
     };
