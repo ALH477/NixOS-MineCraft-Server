@@ -1,6 +1,10 @@
 # NixOS Minecraft Crossplay Module
 
+Dedicated wam requirements are 4gb by default. aarch64 has automatic defaults based on enviroment limits
+
 This repository contains a Nix Flake that exports a NixOS module designed for deploying a high-performance Java Edition Minecraft server with native Bedrock Edition compatibility. The implementation leverages the Paper server software alongside Geyser and Floodgate to provide a seamless cross-platform experience across multiple hardware architectures.
+
+![Minecwaft]()
 
 ---
 
