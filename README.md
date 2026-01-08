@@ -10,6 +10,8 @@ The configuration is built upon the nix-minecraft community flake which provides
 
 The architecture functions by hosting a standard Java Edition server on the default port while simultaneously running a translation proxy. Bedrock clients connect via the User Datagram Protocol on port 19132, where Geyser translates Bedrock packets into Java-compatible packets. Floodgate facilitates this by handling authentication without requiring Bedrock users to possess a separate Java Edition license.
 
+
+
 ---
 
 ## Deployment Profiles
@@ -24,9 +26,40 @@ This profile is optimized for ARM-based hardware such as Raspberry Pi single-boa
 
 ---
 
-## Implementation Example
+## Docker Deployment
 
-The following example demonstrates how to integrate this module into a standard NixOS flake-based system configuration. The implementation assumes the module is stored in a local directory or referenced via a Git repository.
+This module includes automated build outputs for Docker containers, namespaced under `alh477`. These images are minimal, containing only the Java Runtime, the Paper server binary, and the crossplay plugins. The container includes a smart startup script that automatically handles EULA acceptance and plugin linking.
+
+**Building the Image**
+Run the following command to generate a tarball of the Docker image:
+```bash
+# For Intel/AMD
+nix build .#packages.x86_64-linux.dockerImage
+
+# For ARM/Apple Silicon
+nix build .#packages.aarch64-linux.dockerImage
+
+```
+
+**Running the Container**
+Load the resulting image into your local Docker daemon:
+
+```bash
+docker load < result
+docker run -d \
+  --name mc-server \
+  -p 25565:25565 \
+  -p 19132:19132/udp \
+  -v mc_data:/data \
+  alh477/minecraft-server:latest
+
+```
+
+---
+
+## Implementation Example (NixOS)
+
+The following example demonstrates how to integrate this module into a standard NixOS flake-based system configuration.
 
 ```nix
 {
@@ -37,7 +70,7 @@ The following example demonstrates how to integrate this module into a standard 
 
   outputs = { self, nixpkgs, minecraft-crossplay, ... }: {
     nixosConfigurations.server-instance = nixpkgs.lib.nixosSystem {
-      # Select the appropriate system: "x86_64-linux" or "aarch64-linux"
+      # Select: "x86_64-linux" or "aarch64-linux"
       system = "x86_64-linux";
       modules = [
         minecraft-crossplay.nixosModules.default
@@ -58,8 +91,6 @@ The following example demonstrates how to integrate this module into a standard 
 ## Configuration Requirements
 
 Because this module fetches plugin binaries directly from the GeyserMC build server, users must manually provide the cryptographic hashes for the downloads. Upon the initial execution of a system rebuild, the Nix package manager will identify a hash mismatch for the placeholder values provided in the source code. The user is required to replace these placeholders with the actual SHA-256 hashes provided in the error output to ensure the integrity of the plugin binaries.
-
-The module also implements a declarative configuration for the Geyser plugin. This ensures that the authentication type is correctly set to use Floodgate by default and that the Bedrock listener is properly bound to the appropriate network interfaces. Modifications to these settings should be made within the Nix module logic to maintain the declarative nature of the deployment.
 
 ---
 
